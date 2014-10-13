@@ -9,7 +9,6 @@ import (
 	zk "github.com/samuel/go-zookeeper/zk"
 )
 
-var rootNode string = "/go_zk"
 type zkOpe struct {
 	conn *zk.Conn
 }
@@ -88,7 +87,7 @@ func (f *zkOpe) CreateNode(path string, value string) (err error) {
 }
 
 // 监控子节点个数变化
-func (f *zkOpe) WatchChildren(path string, addC, delC chan map[string]string) (err error){
+func (f *zkOpe) WatchChildren(path string, addC, delC chan <- map[string]string) (err error){
 	trimpSuffix(&path, '/')
 	oldM := make(map[string]string)
 	newM := make(map[string]string)
@@ -127,7 +126,7 @@ func (f *zkOpe) WatchChildren(path string, addC, delC chan map[string]string) (e
 }
 
 // 收集子节点的个数变化
-//func (f *zkOpe) CollectChildren(addC, delC chan map[string]string) (err error){
+//func (f *zkOpe) CollectChildren(addC, delC <- chan map[string]string) (err error){
 //	go func() {
 //		for {
 //		select {
@@ -144,7 +143,7 @@ func (f *zkOpe) WatchChildren(path string, addC, delC chan map[string]string) (e
 //}
 
 // 收集子节点的个数变化，并将子节点的值加入监控
-func (f *zkOpe) CollectChildren2(addC, delC chan map[string]string, addV, delV chan KVStruct) (err error){
+func (f *zkOpe) CollectChildren2(addC, delC chan map[string]string, addV, delV chan <- KVStruct) (err error){
 	go func() {
 		for {
 			select {
@@ -167,7 +166,7 @@ type KVStruct struct {
 	V string
 }
 // 监控节点值的变化
-func (f *zkOpe) WatchNode(node string, addV, delV chan KVStruct) (err error) {
+func (f *zkOpe) WatchNode(node string, addV, delV chan <- KVStruct) (err error) {
 	trimpSuffix(&node, '/')
 	
 	go func() {
@@ -192,7 +191,7 @@ func (f *zkOpe) WatchNode(node string, addV, delV chan KVStruct) (err error) {
 }
 
 // 收集值的变化
-//func (f *zkOpe) CollectNode(addV, delV chan KVStruct) (err error){
+//func (f *zkOpe) CollectNode(addV, delV <- chan KVStruct) (err error){
 //	go func() {
 //		for {
 //			select {
@@ -210,7 +209,7 @@ func (f *zkOpe) WatchNode(node string, addV, delV chan KVStruct) (err error) {
 //}
 
 // 收集值的变化
-func (f *zkOpe) CollectNode2(addV, delV chan KVStruct, sm smap.SafeRWMap) (err error){
+func (f *zkOpe) CollectNode2(addV, delV <- chan KVStruct, sm smap.SafeRWMap) (err error){
 	go func() {
 		for {
 			select {
@@ -229,48 +228,28 @@ func (f *zkOpe) CollectNode2(addV, delV chan KVStruct, sm smap.SafeRWMap) (err e
 ////////////////////////////////////// 
 
 // 获取zookeeper当前状态的镜像
-func GetZookeeperImage(path string) {
-	servers := []string{"10.15.144.71:2181", "10.15.144.72:2181", "10.15.144.73:2181"}
-	sm := smap.NewsafeRWMap()
-	f := zkOpe{}
-	f.Connect(servers, time.Second*10)
-	defer f.conn.Close()
-	
-	f.CreateNode(path, "--")
-	addC := make(chan map[string]string, 1024)
-	delC := make(chan map[string]string, 1024)
-	addV := make(chan KVStruct, 1024)
-	delV := make(chan KVStruct, 1024)
-	f.WatchChildren(path, addC, delC)
-	f.CollectChildren2(addC, delC, addV, delV)
-	f.CollectNode2(addV, delV, *sm)
-	time.Sleep(time.Second*1000)
+func GetZookeeperImage(servers []string, path string) {
+	go func() {
+		sm := smap.NewsafeRWMap()
+		f := zkOpe{}
+		f.Connect(servers, time.Second*10)
+		defer f.conn.Close()
+		
+		f.CreateNode(path, "--")
+		addC := make(chan map[string]string, 1024)
+		delC := make(chan map[string]string, 1024)
+		addV := make(chan KVStruct, 1024)
+		delV := make(chan KVStruct, 1024)
+		f.WatchChildren(path, addC, delC)
+		f.CollectChildren2(addC, delC, addV, delV)
+		f.CollectNode2(addV, delV, *sm)
+		time.Sleep(time.Second*1000)
+	}()
 }
 
-
 func main() {
-//	servers := []string{"10.15.144.71:2181", "10.15.144.72:2181", "10.15.144.73:2181"}
-//
-//	f := zkOpe{}
-//	f.Connect(servers, time.Second*10)
-//	defer f.conn.Close()
-//
-//	f.CreateNode("/go_zk/kk/", "256")
-//
-//	addC := make(chan map[string]string)
-//	delC := make(chan map[string]string)
-//	f.WatchChildren("/go_zk/kk", addC, delC)
-//	f.WatchChildren("/go_zk/vv", addC, delC)
-//	f.CollectChildren(addC, delC)
-//	
-//	
-//	addV := make(chan KVStruct)
-//	delV := make(chan KVStruct)
-//	f.WatchNode("/go_zk/kk/", addV, delV)
-//	f.WatchNode("/go_zk/vv/", addV, delV)
-//	f.CollectNode(addV, delV)
-
-	GetZookeeperImage("/go_zk")
+	servers := []string{"10.15.144.71:2181", "10.15.144.72:2181", "10.15.144.73:2181"}
+	GetZookeeperImage(servers, "/go_zk")
 	
 	time.Sleep(time.Second*1000)
 }
